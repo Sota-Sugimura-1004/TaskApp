@@ -8,10 +8,14 @@ import io.realm.RealmChangeListener
 import io.realm.Sort
 import android.content.Intent
 import android.support.v7.app.AlertDialog
+import android.app.AlarmManager
+import android.app.PendingIntent
+import kotlinx.android.synthetic.main.content_input.*
 
 const val EXTRA_TASK = "jp.techacademy.taro.kirameki.taskapp.TASK"
 
 class MainActivity : AppCompatActivity() {
+
     private lateinit var mRealm: Realm
     private val mRealmListener = object : RealmChangeListener<Realm> {
         override fun onChange(element: Realm) {
@@ -28,6 +32,23 @@ class MainActivity : AppCompatActivity() {
         fab.setOnClickListener { view ->
             val intent = Intent(this@MainActivity, InputActivity::class.java)
             startActivity(intent)
+        }
+
+        category_search_button.setOnClickListener { view ->
+
+            if(category_search_text.text.toString().length!=0) {
+                // Realmデータベースから、「検索したカテゴリのデータを取得して新しい日時順に並べた結果」を取得
+                val taskRealmResults =
+                    mRealm.where(Task::class.java)
+                        .equalTo("category", category_search_text.text.toString()).findAll()
+                        .sort("date", Sort.DESCENDING)
+                // 上記の結果を、TaskList としてセットする
+                mTaskAdapter.taskList = mRealm.copyFromRealm(taskRealmResults)
+                // 表示を更新するために、アダプターにデータが変更されたことを知らせる
+                mTaskAdapter.notifyDataSetChanged()
+            }else{
+                reloadListView()
+            }
         }
 
         // Realmの設定
@@ -64,6 +85,17 @@ class MainActivity : AppCompatActivity() {
                 results.deleteAllFromRealm()
                 mRealm.commitTransaction()
 
+                val resultIntent = Intent(applicationContext, TaskAlarmReceiver::class.java)
+                val resultPendingIntent = PendingIntent.getBroadcast(
+                    this@MainActivity,
+                    task.id,
+                    resultIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                )
+
+                val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+                alarmManager.cancel(resultPendingIntent)
+
                 reloadListView()
             }
 
@@ -79,12 +111,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun reloadListView() {
-        // Realmデータベースから、「全てのデータを取得して新しい日時順に並べた結果」を取得
-        val taskRealmResults = mRealm.where(Task::class.java).findAll().sort("date", Sort.DESCENDING)
 
+        val taskRealmResults =
+            mRealm.where(Task::class.java).findAll().sort("date", Sort.DESCENDING)
         // 上記の結果を、TaskList としてセットする
         mTaskAdapter.taskList = mRealm.copyFromRealm(taskRealmResults)
-
         // TaskのListView用のアダプタに渡す
         listView1.adapter = mTaskAdapter
 
